@@ -38,9 +38,8 @@ export class UsersService {
     return `This action returns all users`;
   }
 
-  async findOne(username: string) : Promise<User | null> {
+  async findOne(username: string): Promise<User | null> {
     return this.userModel.findOne({ username }).exec();
-    
   }
 
   update(id: number, updateUserDto: UpdateUserDto) {

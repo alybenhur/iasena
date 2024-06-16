@@ -1,5 +1,4 @@
 export class MessageDto {
-   
-    id: string;
-    mensaje: string;
-  }
+  id: string;
+  mensaje: string;
+}

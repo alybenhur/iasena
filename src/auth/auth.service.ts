@@ -3,12 +3,9 @@ import { JwtService } from '@nestjs/jwt';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { CreateAuthDto } from './dto/create-auth.dto';
 
-
 @Injectable()
 export class AuthService {
-  constructor(
-       @Inject(JwtStrategy) private jwtStrategy: JwtStrategy,
-  ) {}
+  constructor(@Inject(JwtStrategy) private jwtStrategy: JwtStrategy) {}
 
   async signIn(userSignIn: CreateAuthDto): Promise<any> {
     return await this.jwtStrategy.loginJwt({
@@ -16,4 +13,4 @@ export class AuthService {
       password: userSignIn.password,
     });
   }
-  }
+}

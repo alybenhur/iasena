@@ -5,6 +5,6 @@ import { AuthModule } from '../auth/auth.module';
 
 @Module({
   providers: [MessageGateway, MessageService],
-  imports : [AuthModule]
+  imports: [AuthModule],
 })
 export class MessageModule {}

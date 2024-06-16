@@ -14,8 +14,13 @@ import configuration from './config/configuration';
       load: [configuration],
       isGlobal: true,
     }),
-  MongooseModule.forRoot('mongodb+srv://samyflw:LibnPNzdEDigLWeE@location-siigo.kij6qfp.mongodb.net/pddv'),
-  MessageModule, AuthModule, UsersModule],
+    MongooseModule.forRoot(
+      'mongodb+srv://samyflw:LibnPNzdEDigLWeE@location-siigo.kij6qfp.mongodb.net/pddv',
+    ),
+    MessageModule,
+    AuthModule,
+    UsersModule,
+  ],
   controllers: [AppController],
   providers: [AppService],
 })
