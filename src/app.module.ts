@@ -7,6 +7,7 @@ import { UsersModule } from './users/users.module';
 import { MongooseModule } from '@nestjs/mongoose';
 import { ConfigModule } from '@nestjs/config';
 import configuration from './config/configuration';
+import { ContenidoModule } from './contenido/contenido.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import configuration from './config/configuration';
     MessageModule,
     AuthModule,
     UsersModule,
+    ContenidoModule,
   ],
   controllers: [AppController],
   providers: [AppService],
