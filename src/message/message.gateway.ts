@@ -1,13 +1,13 @@
 import {
+  ConnectedSocket,
+  MessageBody,
   OnGatewayConnection,
   OnGatewayDisconnect,
   SubscribeMessage,
   WebSocketGateway,
   WebSocketServer,
 } from '@nestjs/websockets';
-import { MessageService } from './message.service';
 import { Server, Socket } from 'socket.io';
-import { MessageDto } from './dto/message.dto';
 import { JwtService } from '@nestjs/jwt';
 import { JwtPayload } from '../auth/strategies/interfaces/jwt-strategy.interface';
 
@@ -16,12 +16,12 @@ export class MessageGateway
   implements OnGatewayConnection, OnGatewayDisconnect
 {
   @WebSocketServer() wss: Server;
-
+  private rooms: Map<string, Set<string>> = new Map();
+  private userRooms: Map<string, string> = new Map();
   constructor(
-    private readonly messageService: MessageService,
+    //  private readonly messageService: MessageService,
     private readonly jwtService: JwtService,
   ) {}
-  private messagesData: string[] = [];
 
   handleConnection(client: Socket) {
     let payload: JwtPayload;
@@ -32,19 +32,59 @@ export class MessageGateway
       client.disconnect();
       return;
     }
-
-    this.messageService.registerClients(client, payload.username);
-    this.wss.emit('clientsconnect', this.messageService.clientsConnectAll());
   }
 
   handleDisconnect(client: Socket) {
-    this.messageService.removeClients(client.id);
-    this.wss.emit('clientsconnect', this.messageService.clientsConnectAll());
+    this.rooms.forEach((users, room) => {
+      if (users.delete(client.id)) {
+        this.wss.to(room).emit('users', Array.from(users));
+      }
+    });
   }
 
-  @SubscribeMessage('msgToServer')
-  onMensajeFromcleinte(client: Socket, data: MessageDto) {
-    this.messagesData.push(data.mensaje);
-    client.broadcast.emit('message-server', this.messagesData);
+  @SubscribeMessage('joinRoom')
+  handleJoinRoom(
+    @MessageBody() data: { room: string; username: string },
+    @ConnectedSocket() client: Socket,
+  ) {
+    client.join(data.room);
+    if (!this.rooms.has(data.room)) {
+      this.rooms.set(data.room, new Set());
+    }
+    this.rooms.get(data.room).add(data.username);
+    this.userRooms.set(data.username, data.room);
+    this.wss.to(data.room).emit('users', Array.from(this.rooms.get(data.room)));
+  }
+
+  @SubscribeMessage('leaveRoom')
+  handleLeaveRoom(
+    @MessageBody() data: { room: string; username: string },
+    @ConnectedSocket() client: Socket,
+  ) {
+    client.leave(data.room);
+    if (this.rooms.has(data.room)) {
+      this.rooms.get(data.room).delete(data.username);
+      this.wss
+        .to(data.room)
+        .emit('users', Array.from(this.rooms.get(data.room)));
+    }
+  }
+
+  @SubscribeMessage('getUserRoom')
+  handleGetUserRoom(
+    @MessageBody() data: { username: string },
+    @ConnectedSocket() client: Socket,
+  ) {
+    const room = this.userRooms.get(data.username);
+    client.emit('userRoom', { username: data.username, room });
+  }
+
+  @SubscribeMessage('message')
+  handleMessage(
+    @MessageBody() data: { room: string; message: string; username: string },
+    @ConnectedSocket() client: Socket,
+  ) {
+    console.log(data.message, data.room);
+    this.wss.to(data.room).emit('message', data);
   }
 }

@@ -16,7 +16,7 @@ import { ContenidoModule } from './contenido/contenido.module';
       isGlobal: true,
     }),
     MongooseModule.forRoot(
-      'mongodb+srv://samyflw:LibnPNzdEDigLWeE@location-siigo.kij6qfp.mongodb.net/pddv',
+      'mongodb://root:12345@ac-xfzwvbk-shard-00-00.kkgtidf.mongodb.net:27017,ac-xfzwvbk-shard-00-01.kkgtidf.mongodb.net:27017,ac-xfzwvbk-shard-00-02.kkgtidf.mongodb.net:27017/iasenas?authSource=admin&replicaSet=atlas-9o4jeb-shard-0&readPreference=primary&appname=MongoDB%20Compass%20Community&ssl=true',
     ),
     MessageModule,
     AuthModule,

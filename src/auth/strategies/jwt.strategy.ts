@@ -35,7 +35,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       sub: userBd.id,
       username: userBd.username,
     };
-    let userNew: any = userBd;
+    const userNew: any = userBd;
     userNew.access_token = await this.jwtService.signAsync(payloadZ);
     return userNew;
   }
@@ -43,7 +43,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   async loginJwt(payload: JwtPayload): Promise<any> {
     const { username, password } = payload;
     console.log(password);
-    let userBd: any = await this.userModel
+    const userBd: any = await this.userModel
       .findOne({ username })
       .select(['username', 'password']);
     if (!userBd) {
