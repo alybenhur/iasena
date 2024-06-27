@@ -87,4 +87,13 @@ export class MessageGateway
     console.log(data.message, data.room);
     this.wss.to(data.room).emit('message', data);
   }
+
+  @SubscribeMessage('image')
+  handleImage(
+    @MessageBody() data: { room: string; image: string; username: string },
+    @ConnectedSocket() client: Socket
+  ) {
+    this.wss.to(data.room).emit('image', data);
+    
+  }
 }
