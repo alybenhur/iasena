@@ -18,6 +18,10 @@ export class MessageGateway
   @WebSocketServer() wss: Server;
   private rooms: Map<string, Set<string>> = new Map();
   private userRooms: Map<string, string> = new Map();
+  private chatRooms: Map<
+    string,
+    { username: string; message: string; image?: string }[]
+  > = new Map();
   constructor(
     //  private readonly messageService: MessageService,
     private readonly jwtService: JwtService,
@@ -53,7 +57,27 @@ export class MessageGateway
     }
     this.rooms.get(data.room).add(data.username);
     this.userRooms.set(data.username, data.room);
+    if (!this.chatRooms.has(data.room)) {
+      this.chatRooms.set(data.room, []);
+    }
     this.wss.to(data.room).emit('users', Array.from(this.rooms.get(data.room)));
+    // Enviar todos los mensajes anteriores al usuario que se une a la sala
+    client.emit('chatHistory', this.chatRooms.get(data.room));
+  }
+
+  @SubscribeMessage('message')
+  handleMessage(
+    @MessageBody() data: { room: string; message: string; username: string },
+    @ConnectedSocket() client: Socket,
+  ) {
+    if (!this.chatRooms.has(data.room)) {
+      this.chatRooms.set(data.room, []);
+    }
+    const messageData = { username: data.username, message: data.message };
+    this.chatRooms.get(data.room).push(messageData);
+    this.wss.to(data.room).emit('message', messageData);
+    // Enviar el arreglo completo de mensajes
+    this.wss.to(data.room).emit('chatHistory', this.chatRooms.get(data.room));
   }
 
   @SubscribeMessage('leaveRoom')
@@ -79,21 +103,16 @@ export class MessageGateway
     client.emit('userRoom', { username: data.username, room });
   }
 
-  @SubscribeMessage('message')
-  handleMessage(
-    @MessageBody() data: { room: string; message: string; username: string },
-    @ConnectedSocket() client: Socket,
-  ) {
-    console.log(data.message, data.room);
-    this.wss.to(data.room).emit('message', data);
-  }
-
   @SubscribeMessage('image')
   handleImage(
     @MessageBody() data: { room: string; image: string; username: string },
-    @ConnectedSocket() client: Socket
+    @ConnectedSocket() client: Socket,
   ) {
-    this.wss.to(data.room).emit('image', data);
-    
+    this.chatRooms.get(data.room).push({
+      username: data.username,
+      image: data.image,
+      message: 'ImageSocket', // or leave it empty or any other indication that it is an image
+    });
+    this.wss.to(data.room).emit('chatHistory', this.chatRooms.get(data.room));
   }
 }
