@@ -18,4 +18,7 @@ export class CreateUserDto {
     message: 'La contraseña debe contener Mayusculas, minusculas y numeros',
   })
   readonly password: string;
+
+  @IsNotEmpty()
+  readonly rol: string;
 }

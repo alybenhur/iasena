@@ -42,10 +42,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
   async loginJwt(payload: JwtPayload): Promise<any> {
     const { username, password } = payload;
-    console.log(password);
     const userBd: any = await this.userModel
       .findOne({ username })
-      .select(['username', 'password']);
+      .select(['username', 'password', 'rol']);
     if (!userBd) {
       throw new UnauthorizedException('El usuario no esta registrado');
     } else if (!bcrypt.compareSync(password, userBd.password)) {
@@ -54,11 +53,13 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     const payloadZ = {
       sub: userBd.id,
       username: userBd.username,
+      rol: userBd.rol,
     };
     userBd.password = null;
     const userReturn = {
       id: userBd._id,
       username: userBd.username,
+      rol: userBd.rol,
       access_token: await this.jwtService.signAsync(payloadZ),
     };
     return userReturn;
