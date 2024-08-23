@@ -22,8 +22,9 @@ export class MessageGateway
   private userRooms: Map<string, string> = new Map();
   private chatRooms: Map<
     string,
-    { username: string; message: string; video?: Buffer }[]
+    { username: string; message: string; video?: string }[]
   > = new Map();
+  private videoChunks = {};
   constructor(
     //  private readonly messageService: MessageService,
     private readonly jwtService: JwtService,
@@ -70,7 +71,7 @@ export class MessageGateway
   }
 
   @SubscribeMessage('message')
-  handleMessage(
+  async handleMessage(
     @MessageBody() data: { room: string; message: string; username: string },
     @ConnectedSocket() client: Socket,
   ) {
@@ -79,7 +80,19 @@ export class MessageGateway
     }
     const messageData = { username: data.username, message: data.message };
     this.chatRooms.get(data.room).push(messageData);
-    this.wss.to(data.room).emit('message', messageData);
+
+    this.wss.to(data.room).emit('chatHistory', this.chatRooms.get(data.room));
+
+    const responseVideo: any = await this.sendTextToFlask(data.message);
+
+    const video_base64 = responseVideo.data.videos;
+
+    this.chatRooms.get(data.room).push({
+      username: data.username,
+      video: video_base64,
+      message: 'videoSocket', // o deja en blanco o cualquier otra indicación
+    });
+
     // Enviar el arreglo completo de mensajes
     this.wss.to(data.room).emit('chatHistory', this.chatRooms.get(data.room));
   }
@@ -110,24 +123,90 @@ export class MessageGateway
 
   @SubscribeMessage('video')
   async handleImage(
-    @MessageBody() data: { room: string; video: any; username: string },
+    @MessageBody() data: { room: string; video: string; username: string }, // Asegúrate de que 'video' sea de tipo string
     @ConnectedSocket() client: Socket,
   ) {
-    const video = Buffer.from(data.video);
-    console.log(video);
+    // video ya está en Base64, así que no es necesario convertirlo a Buffer y de vuelta a Base64
+    const videoBase64 = data.video;
+
+    // Guarda el video en la sala de chat
     this.chatRooms.get(data.room).push({
       username: data.username,
-      video: video,
-      message: 'videoSocket', // or leave it empty or any other indication that it is an image
+      video: videoBase64,
+      message: 'videoSocket', // o deja en blanco o cualquier otra indicación
     });
+
+    // Emitir el historial del chat
     this.wss.to(data.room).emit('chatHistory', this.chatRooms.get(data.room));
 
-    const videoBase64 = video.toString('base64');
-
     // Enviar al endpoint Flask
-    const respModel = await this.sendVideoToFlask(videoBase64);
+    try {
+      const respModel = await this.sendVideoToFlask(videoBase64);
 
-    console.log(respModel.data);
+      const messageData = {
+        username: data.username,
+        message: respModel.data['result'],
+      };
+
+      this.chatRooms.get(data.room).push(messageData);
+      this.wss.to(data.room).emit('message', messageData);
+      // Enviar el arreglo completo de mensajes
+      this.wss.to(data.room).emit('chatHistory', this.chatRooms.get(data.room));
+      console.log(typeof respModel.data);
+    } catch (error) {
+      console.error('Error al enviar el video a Flask:', error);
+    }
+  }
+
+  @SubscribeMessage('video_chunk')
+  async handleVideoChunk(
+    @MessageBody()
+    data: {
+      room: string;
+      username: string;
+      chunk: number[];
+      chunkIndex: number;
+      totalChunks: number;
+    },
+    @ConnectedSocket() client: Socket,
+  ) {
+    const { room, username, chunk, chunkIndex, totalChunks } = data;
+    // Usa el nombre de usuario como clave en lugar de la sala
+    if (!this.videoChunks[username]) {
+      this.videoChunks[username] = [];
+    }
+
+    // Guarda el fragmento de video en el índice correspondiente
+    this.videoChunks[username][chunkIndex] = Buffer.from(new Uint8Array(chunk));
+
+    // Verifica si todos los fragmentos del usuario han sido recibidos
+    if (this.videoChunks[username].length === totalChunks) {
+      const completeVideo = Buffer.concat(this.videoChunks[username]);
+
+      // Limpia los fragmentos guardados para ese usuario
+      delete this.videoChunks[username];
+
+      // Procesa el video completo (ej. enviar a otro servicio)
+      const videoBase64 = completeVideo.toString('base64');
+
+      this.chatRooms.get(room).push({
+        username: username,
+        message: 'videoSocket',
+        video: videoBase64,
+      });
+      this.wss.to(room).emit('chatHistory', this.chatRooms.get(room));
+
+      const respModel = await this.sendVideoToFlask(videoBase64);
+
+      // Agrega el video completo al historial de chat del usuario
+      this.chatRooms.get(room).push({
+        username: username,
+        message: respModel.data['result'],
+      });
+
+      // Actualiza el historial de chat en la sala
+      this.wss.to(room).emit('chatHistory', this.chatRooms.get(room));
+    }
   }
 
   private async sendVideoToFlask(videoBase64: string) {
@@ -142,6 +221,18 @@ export class MessageGateway
       console.log('Resultado de Flask:', response.data);
     } catch (error) {
       console.error('Error al enviar video a Flask:', error.message);
+    }
+  }
+
+  private async sendTextToFlask(word: string) {
+    try {
+      return await lastValueFrom(
+        this.httpService.post('http://localhost:5000/get_video', {
+          word: word,
+        }),
+      );
+    } catch (error) {
+      console.error('Error al enviar word a Flask:', error.message);
     }
   }
 }
