@@ -3,43 +3,62 @@ import {
   Get,
   Post,
   Body,
-  Patch,
   Param,
-  Delete,
   UseGuards,
+  Delete,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
-import { CreateUserDto } from './dto/create-user.dto';
-import { UpdateUserDto } from './dto/update-user.dto';
+import {
+  CreateUserAdminDto,
+  CreateUserDto,
+  CreateUserRootDto,
+} from './dto/create-user.dto';
 import { AdminAuthGuard } from 'src/guard/admin.guard';
+import { RootAuthGuard } from 'src/guard/root.guard';
 
-@UseGuards(AdminAuthGuard)
 @Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
+  @UseGuards(AdminAuthGuard)
   @Post()
   create(@Body() createUserDto: CreateUserDto) {
-    return this.usersService.create(createUserDto);
+    return this.usersService.createUser(createUserDto);
   }
 
+  @UseGuards(RootAuthGuard)
+  @Post('/admin')
+  createAdmin(@Body() createUserAdminDto: CreateUserAdminDto) {
+    return this.usersService.createUserAdmin(createUserAdminDto);
+  }
+
+  @Post('/root')
+  createRoot(@Body() createUserRootDto: CreateUserRootDto) {
+    console.log('root');
+    return this.usersService.createUserRoot(createUserRootDto);
+  }
+
+  @UseGuards(AdminAuthGuard)
   @Get()
-  findAll() {
+  findUser() {
     return this.usersService.findAll();
   }
 
+  @UseGuards(RootAuthGuard)
+  @Get('/admin')
+  findAdmin() {
+    return this.usersService.findAdmin();
+  }
+
+  @UseGuards(AdminAuthGuard)
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.usersService.findOne(id);
   }
 
-  @Patch(':id')
-  update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
-    return this.usersService.update(+id, updateUserDto);
-  }
-
+  @UseGuards(AdminAuthGuard)
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.usersService.remove(+id);
+  delete(@Param('id') id: string) {
+    return this.usersService.delete(id);
   }
 }

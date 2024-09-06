@@ -2,4 +2,5 @@
 export default () => ({
   PORT: 3000,
   SECRET: 'IA LENGUAJE DE SEÑAS',
+  KEY: 'IASENABACKENDX',
 });

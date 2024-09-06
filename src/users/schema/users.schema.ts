@@ -13,7 +13,7 @@ export class User {
 
   @Prop({
     default: 'Admin',
-    enum: ['Admin', 'Instructor', 'Aprendiz'],
+    enum: ['Root', 'Admin', 'Instructor', 'Aprendiz'],
     required: true,
   })
   rol: string;
