@@ -70,6 +70,14 @@ export class MessageGateway
     client.emit('chatHistory', this.chatRooms.get(data.room));
   }
 
+  @SubscribeMessage('audio')
+  async handleAudio(
+    @MessageBody() data: { room: string; audio: string; username: string },
+    @ConnectedSocket() client: Socket,
+  ) {
+
+  }
+
   @SubscribeMessage('message')
   async handleMessage(
     @MessageBody() data: { room: string; message: string; username: string },
@@ -212,7 +220,7 @@ export class MessageGateway
   private async sendVideoToFlask(videoBase64: string) {
     try {
       const response = await lastValueFrom(
-        this.httpService.post('http://localhost:5000/evaluate', {
+        this.httpService.post('https://ai.tickapp.online/evaluate', {
           threshold: 0.9, // Puedes ajustar este valor según sea necesario
           video_base64: videoBase64,
         }),
@@ -227,7 +235,7 @@ export class MessageGateway
   private async sendTextToFlask(word: string) {
     try {
       return await lastValueFrom(
-        this.httpService.post('http://localhost:5000/get_video', {
+        this.httpService.post('https://ai.tickapp.online/get_video', {
           word: word,
         }),
       );
