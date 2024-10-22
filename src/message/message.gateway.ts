@@ -22,7 +22,7 @@ export class MessageGateway
   private userRooms: Map<string, string> = new Map();
   private chatRooms: Map<
     string,
-    { username: string; message: string; video?: string }[]
+    { username: string; message: string; video?: string, audio?: string }[]
   > = new Map();
   private videoChunks = {};
   constructor(
@@ -70,13 +70,7 @@ export class MessageGateway
     client.emit('chatHistory', this.chatRooms.get(data.room));
   }
 
-  @SubscribeMessage('audio')
-  async handleAudio(
-    @MessageBody() data: { room: string; audio: string; username: string },
-    @ConnectedSocket() client: Socket,
-  ) {
 
-  }
 
   @SubscribeMessage('message')
   async handleMessage(
@@ -160,11 +154,67 @@ export class MessageGateway
       this.wss.to(data.room).emit('message', messageData);
       // Enviar el arreglo completo de mensajes
       this.wss.to(data.room).emit('chatHistory', this.chatRooms.get(data.room));
-      console.log(typeof respModel.data);
     } catch (error) {
       console.error('Error al enviar el video a Flask:', error);
     }
   }
+
+  @SubscribeMessage('audio')
+async handleAudio(
+  @MessageBody() data: { room: string; audio: string; username: string },
+  @ConnectedSocket() client: Socket,
+) {
+  const { room, audio, username } = data;
+
+  // Guarda el mensaje de audio en el historial de chat
+  if (!this.chatRooms.has(room)) {
+    this.chatRooms.set(room, []);
+  }
+
+  // Emitir el audio base64 a los usuarios de la sala (si deseas mostrar el audio)
+  this.chatRooms.get(room).push({
+    username: username,
+    message: 'audioSocket',
+    audio: audio,
+  });
+
+  // Emitir el historial actualizado del chat
+  this.wss.to(room).emit('chatHistory', this.chatRooms.get(room));
+
+  try {
+    // Enviar el audio a Flask para la conversión de voz a texto
+    const response = await this.senAudioToFlask(audio);
+
+    // Extraer el texto del audio
+    const resultText = response.data['text'];
+
+    // Guardar el resultado del texto en el historial de chat
+    this.chatRooms.get(room).push({
+      username: username,
+      message: resultText,
+    });
+
+    // Emitir el historial actualizado del chat con el mensaje de texto
+    this.wss.to(room).emit('chatHistory', this.chatRooms.get(room));
+
+    const responseVideo: any = await this.sendTextToFlask(resultText);
+
+    const video_base64 = responseVideo.data.videos;
+
+    this.chatRooms.get(data.room).push({
+      username: data.username,
+      video: video_base64,
+      message: 'videoSocket', // o deja en blanco o cualquier otra indicación
+    });
+
+    // Enviar el arreglo completo de mensajes
+    this.wss.to(data.room).emit('chatHistory', this.chatRooms.get(data.room));
+
+  } catch (error) {
+    console.error('Error al procesar el audio:', error.message);
+  }
+}
+
 
   @SubscribeMessage('video_chunk')
   async handleVideoChunk(
@@ -220,7 +270,7 @@ export class MessageGateway
   private async sendVideoToFlask(videoBase64: string) {
     try {
       const response = await lastValueFrom(
-        this.httpService.post('https://ai.tickapp.online/evaluate', {
+        this.httpService.post('http://127.0.0.1:5000/evaluate', {
           threshold: 0.9, // Puedes ajustar este valor según sea necesario
           video_base64: videoBase64,
         }),
@@ -235,12 +285,23 @@ export class MessageGateway
   private async sendTextToFlask(word: string) {
     try {
       return await lastValueFrom(
-        this.httpService.post('https://ai.tickapp.online/get_video', {
+        this.httpService.post('http://127.0.0.1:5000/get_video', {
           word: word,
         }),
       );
     } catch (error) {
       console.error('Error al enviar word a Flask:', error.message);
+    }
+  }
+  private async senAudioToFlask(audio_base64: string) {
+    try {
+      return await lastValueFrom(
+        this.httpService.post('http://127.0.0.1:5000/speech_to_text', {
+          audio_base64,
+        }),
+      );
+    } catch (error) {
+      console.error('Error al enviar audio_base64 a Flask:', error.message);
     }
   }
 }
