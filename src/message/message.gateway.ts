@@ -22,7 +22,13 @@ export class MessageGateway
   private userRooms: Map<string, string> = new Map();
   private chatRooms: Map<
     string,
-    { username: string; message: string; video?: string, audio?: string }[]
+    {
+      username: string;
+      message: string;
+      video?: string;
+      audio?: string;
+      voice?: string;
+    }[]
   > = new Map();
   private videoChunks = {};
   constructor(
@@ -36,6 +42,7 @@ export class MessageGateway
     const token = client.handshake.headers.authorization;
     try {
       payload = this.jwtService.verify(token);
+      return payload;
     } catch (error) {
       client.disconnect();
       return;
@@ -69,8 +76,6 @@ export class MessageGateway
     // Enviar todos los mensajes anteriores al usuario que se une a la sala
     client.emit('chatHistory', this.chatRooms.get(data.room));
   }
-
-
 
   @SubscribeMessage('message')
   async handleMessage(
@@ -144,10 +149,12 @@ export class MessageGateway
     // Enviar al endpoint Flask
     try {
       const respModel = await this.sendVideoToFlask(videoBase64);
+      console.log('Resp Model');
+      console.log(respModel);
 
       const messageData = {
         username: data.username,
-        message: respModel.data['result'],
+        message: respModel.data['Message'],
       };
 
       this.chatRooms.get(data.room).push(messageData);
@@ -160,61 +167,59 @@ export class MessageGateway
   }
 
   @SubscribeMessage('audio')
-async handleAudio(
-  @MessageBody() data: { room: string; audio: string; username: string },
-  @ConnectedSocket() client: Socket,
-) {
-  const { room, audio, username } = data;
+  async handleAudio(
+    @MessageBody() data: { room: string; audio: string; username: string },
+    @ConnectedSocket() client: Socket,
+  ) {
+    const { room, audio, username } = data;
 
-  // Guarda el mensaje de audio en el historial de chat
-  if (!this.chatRooms.has(room)) {
-    this.chatRooms.set(room, []);
-  }
+    // Guarda el mensaje de audio en el historial de chat
+    if (!this.chatRooms.has(room)) {
+      this.chatRooms.set(room, []);
+    }
 
-  // Emitir el audio base64 a los usuarios de la sala (si deseas mostrar el audio)
-  this.chatRooms.get(room).push({
-    username: username,
-    message: 'audioSocket',
-    audio: audio,
-  });
-
-  // Emitir el historial actualizado del chat
-  this.wss.to(room).emit('chatHistory', this.chatRooms.get(room));
-
-  try {
-    // Enviar el audio a Flask para la conversión de voz a texto
-    const response = await this.senAudioToFlask(audio);
-
-    // Extraer el texto del audio
-    const resultText = response.data['text'];
-
-    // Guardar el resultado del texto en el historial de chat
+    // Emitir el audio base64 a los usuarios de la sala (si deseas mostrar el audio)
     this.chatRooms.get(room).push({
       username: username,
-      message: resultText,
+      message: 'audioSocket',
+      audio: audio,
     });
 
-    // Emitir el historial actualizado del chat con el mensaje de texto
+    // Emitir el historial actualizado del chat
     this.wss.to(room).emit('chatHistory', this.chatRooms.get(room));
 
-    const responseVideo: any = await this.sendTextToFlask(resultText);
+    try {
+      // Enviar el audio a Flask para la conversión de voz a texto
+      const response = await this.senAudioToFlask(audio);
 
-    const video_base64 = responseVideo.data.videos;
+      // Extraer el texto del audio
+      const resultText = response.data['text'];
 
-    this.chatRooms.get(data.room).push({
-      username: data.username,
-      video: video_base64,
-      message: 'videoSocket', // o deja en blanco o cualquier otra indicación
-    });
+      // Guardar el resultado del texto en el historial de chat
+      this.chatRooms.get(room).push({
+        username: username,
+        message: resultText,
+      });
 
-    // Enviar el arreglo completo de mensajes
-    this.wss.to(data.room).emit('chatHistory', this.chatRooms.get(data.room));
+      // Emitir el historial actualizado del chat con el mensaje de texto
+      this.wss.to(room).emit('chatHistory', this.chatRooms.get(room));
 
-  } catch (error) {
-    console.error('Error al procesar el audio:', error.message);
+      const responseVideo: any = await this.sendTextToFlask(resultText);
+
+      const video_base64 = responseVideo.data.videos;
+
+      this.chatRooms.get(data.room).push({
+        username: data.username,
+        video: video_base64,
+        message: 'videoSocket', // o deja en blanco o cualquier otra indicación
+      });
+
+      // Enviar el arreglo completo de mensajes
+      this.wss.to(data.room).emit('chatHistory', this.chatRooms.get(data.room));
+    } catch (error) {
+      console.error('Error al procesar el audio:', error.message);
+    }
   }
-}
-
 
   @SubscribeMessage('video_chunk')
   async handleVideoChunk(
@@ -259,7 +264,13 @@ async handleAudio(
       // Agrega el video completo al historial de chat del usuario
       this.chatRooms.get(room).push({
         username: username,
-        message: respModel.data['result'],
+        message: respModel.data['Message'],
+      });
+
+      this.chatRooms.get(room).push({
+        username: username,
+        message: '',
+        voice: respModel.data['voice'],
       });
 
       // Actualiza el historial de chat en la sala
@@ -272,7 +283,7 @@ async handleAudio(
       const response = await lastValueFrom(
         this.httpService.post('http://127.0.0.1:5000/evaluate', {
           threshold: 0.9, // Puedes ajustar este valor según sea necesario
-          video_base64: videoBase64,
+          videos: videoBase64,
         }),
       );
       return response;
